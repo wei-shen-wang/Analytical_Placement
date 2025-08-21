@@ -36,16 +36,30 @@ void GlobalPlacer::place()
             positions[i] = Point2<double>(module.centerX(), module.centerY());
             continue; // Skip fixed modules.
         }
-        double rand_range = 1.; // Range for random placement
-        double max_x = chip_mid_x + rand_range * w_b;
-        double min_x = chip_mid_x - rand_range * w_b;
-        double max_y = chip_mid_y + rand_range * h_b;
-        double min_y = chip_mid_y - rand_range * h_b;
-        double x = min_x + (max_x - min_x) * rand() / (RAND_MAX + 1.0);
-        double y = min_y + (max_y - min_y) * rand() / (RAND_MAX + 1.0);
-        positions[i] = Point2<double>(x, y);
+        positions[i] = Point2<double>(chip_mid_x, chip_mid_y);
     }
     Wirelength wirelength(_placement); // Wirelength objective function
+    SimpleConjugateGradient wl_optimizer(wirelength, positions, grid_num, _placement); // Wirelength optimizer
+    wl_optimizer.setScalingFactor(0.1); // Set the scaling factor for the step
+    for (int i = 0;i < 1000; i++)
+    {
+        wl_optimizer.Step(); // Perform one optimization step
+        double wl = wirelength(positions); // Compute the wirelength
+        if (i % 100 == 0)
+        {
+            printf("wl = %e, alpha = %.2f\n", wl, wl_optimizer.getAlpha());
+            fflush(stdout);
+        }
+    }
+    // for (size_t i = 0; i < kNumModule; i++)
+    // {
+    //     Module &module = _placement.module(i);
+    //     if (module.isFixed())
+    //     {
+    //         continue; // Skip fixed modules.
+    //     }
+    //     positions[i].x *= 2.5;
+    // }
     Density density(_placement, grid_num);
     wirelength(positions); // Compute the wirelength
     wirelength.Backward(); // Compute the wirelength gradient
@@ -58,8 +72,8 @@ void GlobalPlacer::place()
     double lambda = partialDerivativeWirelength / partialDerivativeDensity; // Set the penalty weight for density
     printf("initial lambda = %e\n", lambda);
     double overflow_ratio = 100.0;      // Initialize overflow ratio
-    constexpr double limit_overflow_ratio = 0.1; // Set a limit for the overflow ratio
-    constexpr int kMaxInnerIter = 1000;
+    constexpr double limit_overflow_ratio = 0.05; // Set a limit for the overflow ratio
+    int kMaxInnerIter = 1000;
     constexpr int limit_no_improvement = 10; // Limit for no improvement iterations
     constexpr int limit_no_improvement_in_cg = 100; // Limit for no improvement in conjugate gradient iterations
     double best_overflow_ratio = 100.0; // Best overflow ratio found so far
@@ -74,6 +88,7 @@ void GlobalPlacer::place()
         optimizer.Initialize();
         double best_objective_value = objectiveFunction(positions); // Compute the initial objective value
         double objective_value = best_objective_value; // Initialize objective value
+        double inner_best_overflow_ratio = density.calculateOverflowRatio();
         int no_improvement_in_cg = 0; // Counter for no improvement in conjugate gradient iterations
         std::vector<Point2<double>> best_positions = positions; // Store the best positions found so far
         int sub_iter = 0; // Counter for sub-iterations
@@ -92,6 +107,7 @@ void GlobalPlacer::place()
                 best_objective_value = objective_value; // Update the best objective value
                 best_positions = positions; // Update the best positions
                 no_improvement_in_cg = 0; // Reset the no improvement counter
+                inner_best_overflow_ratio = overflow_ratio;
             }
             else
             {
@@ -101,15 +117,16 @@ void GlobalPlacer::place()
             ++iter;
         }
         positions = best_positions; // Update positions to the best found
-        if (overflow_ratio < best_overflow_ratio)
+        if (inner_best_overflow_ratio < best_overflow_ratio)
         {
-            best_overflow_ratio = overflow_ratio; // Update the best overflow ratio
+            best_overflow_ratio = inner_best_overflow_ratio; // Update the best overflow ratio
             no_improvement = 0;
         }
         else{
             no_improvement++;
         }
         lambda *= 2;
+        kMaxInnerIter = max(500, static_cast<int>(kMaxInnerIter*0.9));
     }
     ////////////////////////////////////////////////////////////////////
     // Write the placement result into the database. (You may modify this part.)
