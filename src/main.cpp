@@ -109,7 +109,7 @@ int main(int argc, char *argv[])
         total_global_time = time(NULL) - global_time_start;
         total_time+=total_global_time;
     }
-    placement.moveDesignCenter(-original_center_x, -original_center_y); // Move the design center to (0, 0)
+    placement.moveDesignCenter(original_center_x, original_center_y); // Move the design back
 
 
     ////////////////////////////////////////////////////////////////
