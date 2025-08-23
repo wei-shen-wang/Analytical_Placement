@@ -24,9 +24,6 @@ void GlobalPlacer::place()
     double chip_mid_y = _placement.rectangleChip().centerY();
     const size_t &kNumModule = _placement.numModules();
     double grid_num = std::pow(kNumModule, 0.5);
-    double w_b = (_placement.boundryRight() - _placement.boundryLeft()) / grid_num;
-    double h_b = (_placement.boundryTop() - _placement.boundryBottom()) / grid_num;
-    srand(1); // Seed the random number generator for reproducibility
     std::vector<Point2<double>> positions(kNumModule); // Optimization variables (positions of modules). You may modify this line.
     for (size_t i = 0; i < kNumModule; i++)
     {
@@ -44,22 +41,7 @@ void GlobalPlacer::place()
     for (int i = 0;i < 1000; i++)
     {
         wl_optimizer.Step(); // Perform one optimization step
-        double wl = wirelength(positions); // Compute the wirelength
-        if (i % 100 == 0)
-        {
-            printf("wl = %e, alpha = %.2f\n", wl, wl_optimizer.getAlpha());
-            fflush(stdout);
-        }
     }
-    // for (size_t i = 0; i < kNumModule; i++)
-    // {
-    //     Module &module = _placement.module(i);
-    //     if (module.isFixed())
-    //     {
-    //         continue; // Skip fixed modules.
-    //     }
-    //     positions[i].x *= 2.5;
-    // }
     Density density(_placement, grid_num);
     wirelength(positions); // Compute the wirelength
     wirelength.Backward(); // Compute the wirelength gradient
@@ -74,15 +56,15 @@ void GlobalPlacer::place()
     double overflow_ratio = 100.0;      // Initialize overflow ratio
     constexpr double limit_overflow_ratio = 0.05; // Set a limit for the overflow ratio
     int kMaxInnerIter = 1000;
-    constexpr int limit_no_improvement = 10; // Limit for no improvement iterations
-    constexpr int limit_no_improvement_in_cg = 100; // Limit for no improvement in conjugate gradient iterations
-    double best_overflow_ratio = 100.0; // Best overflow ratio found so far
+    constexpr int limit_no_improvement_in_overflowratio = 10;
+    constexpr int limit_no_improvement_in_cg = 100;
+    double best_overflow_ratio = 100.0;
     int iter = 0;
     int no_improvement = 0; // Counter for no improvement in iterations
     ObjectiveFunction objectiveFunction(_placement, grid_num, wirelength, density);
     SimpleConjugateGradient optimizer(objectiveFunction, positions, grid_num, _placement); // Optimizer
     optimizer.setScalingFactor(0.2);
-    while ((overflow_ratio > limit_overflow_ratio) && (no_improvement < limit_no_improvement))
+    while ((overflow_ratio > limit_overflow_ratio) && (no_improvement < limit_no_improvement_in_overflowratio))
     { // Continue until the overflow ratio is small enough
         objectiveFunction.setLambda(lambda); // Set the penalty weight for density in the objective function
         optimizer.Initialize();
@@ -91,12 +73,12 @@ void GlobalPlacer::place()
         double inner_best_overflow_ratio = density.calculateOverflowRatio();
         int no_improvement_in_cg = 0; // Counter for no improvement in conjugate gradient iterations
         std::vector<Point2<double>> best_positions = positions; // Store the best positions found so far
-        int sub_iter = 0; // Counter for sub-iterations
+        int sub_iter = 0;
         while ((no_improvement_in_cg < limit_no_improvement_in_cg) && (sub_iter < kMaxInnerIter)) // Perform optimization steps
         { // Perform optimization until the objective value stops improving
             optimizer.Step();
             overflow_ratio = density.calculateOverflowRatio();
-            if (iter % 10 == 0){
+            if (iter % 50 == 0){
                 printf("iter = %d, sub_iter = %d, overflow = %.4f, f = %e, alpha = %.2f, lambda = %e\n", 
                        iter, sub_iter, overflow_ratio, objective_value, optimizer.getAlpha() ,lambda);
                 fflush(stdout);

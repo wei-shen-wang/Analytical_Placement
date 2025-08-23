@@ -10,6 +10,7 @@
 #include <iostream>
 #include <string.h>
 #include <time.h>
+#include <omp.h>
 
 using namespace std;
 bool handleArgument( const int& argc, char* argv[], CParamPlacement& param )
@@ -52,7 +53,10 @@ bool handleArgument( const int& argc, char* argv[], CParamPlacement& param )
 
 int main(int argc, char *argv[])
 {
-    
+
+    omp_set_dynamic(0);
+    omp_set_num_threads(8);
+    omp_set_schedule(omp_sched_static, 0);
 	
 	gArg.Init( argc, argv );
     if( !handleArgument( argc, argv, param ) )

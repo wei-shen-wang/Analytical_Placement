@@ -1,12 +1,15 @@
 #include "ObjectiveFunction.h"
 
 #include "cstdio"
+#include <omp.h>
 #include <limits>
 #include <cassert>
 
-const double BaseFunction::getSumOfNormPartialDerivative() {
+const double BaseFunction::getSumOfNormPartialDerivative()
+{
     double sum = 0.0;
-    for (const Point2<double> &grad : grad_) {
+    for (const Point2<double> &grad : grad_)
+    {
         // sum += std::sqrt(grad.x * grad.x + grad.y * grad.y);
         sum += std::abs(grad.x) + std::abs(grad.y);
     }
@@ -27,7 +30,55 @@ const double &Wirelength::operator()(const std::vector<Point2<double>> &input)
     input_ = input; // Cache the input for backward pass
     grad_.assign(placement_.numModules(), Point2<double>(0.0, 0.0));
 
+    // LSE
+    // for (size_t i = 0;i < placement_.numNets(); ++i)
+    // {
+    //     Net &net = placement_.net(i);
+    //     double sum_exp_x = 0.0;
+    //     double sum_exp_neg_x = 0.0;
+    //     double sum_exp_y = 0.0;
+    //     double sum_exp_neg_y = 0.0;
+    //     for (size_t j = 0; j < net.numPins(); ++j)
+    //     {
+    //         Pin &pin = net.pin(j);
+    //         unsigned module_id = pin.moduleId();
+    //         double pin_x_pos = input[module_id].x + pin.xOffset();
+    //         double pin_y_pos = input[module_id].y + pin.yOffset();
+    //         double exp_x = exp(pin_x_pos / gamma_);
+    //         double exp_neg_x = 1.0 / exp_x;
+    //         double exp_y = exp(pin_y_pos / gamma_);
+    //         double exp_neg_y = 1.0 / exp_y;
+    //         sum_exp_x += exp_x;
+    //         sum_exp_neg_x += exp_neg_x;
+    //         sum_exp_y += exp_y;
+    //         sum_exp_neg_y += exp_neg_y;
+    //     }
+    //     value_ += log(sum_exp_x) + log(sum_exp_neg_x) + log(sum_exp_y) + log(sum_exp_neg_y);
+    //     // Compute the gradient for each x and y
+    //     for (size_t j = 0; j < net.numPins(); ++j)
+    //     {
+    //         Pin &pin = net.pin(j);
+    //         unsigned module_id = pin.moduleId();
+    //         if (placement_.module(module_id).isFixed()) {
+    //             continue; // Skip fixed modules
+    //         }
+    //         double pin_x_pos = input[module_id].x + pin.xOffset();
+    //         double pin_y_pos = input[module_id].y + pin.yOffset();
+    //         double exp_x = exp(pin_x_pos / gamma_);
+    //         double exp_neg_x = 1.0 / exp_x;
+    //         double exp_y = exp(pin_y_pos / gamma_);
+    //         double exp_neg_y = 1.0 / exp_y;
+    //         double grad_x = gamma_ * (exp_x / sum_exp_x - exp_neg_x / sum_exp_neg_x);
+    //         double grad_y = gamma_ * (exp_y / sum_exp_y - exp_neg_y / sum_exp_neg_y);
+    //         // Update the gradient for the module
+    //         grad_[module_id].x += grad_x;
+    //         grad_[module_id].y += grad_y;
+    //     }
+    // }
+    // value_ *= gamma_;
+
     // normal WA
+    #pragma omp parallel for
     for (size_t i = 0; i < placement_.numNets(); ++i)
     {
         Net &net = placement_.net(i);
@@ -63,13 +114,15 @@ const double &Wirelength::operator()(const std::vector<Point2<double>> &input)
         double WA_y_max = WA_y_max_numerator / WA_y_max_denominator;
         double WA_y_min = WA_y_min_numerator / WA_y_min_denominator;
         double WA_wirelength = (WA_x_max - WA_x_min) + (WA_y_max - WA_y_min);
-        value_ += WA_wirelength;
+
+        
         // Compute the gradient for each x and y
         for (size_t j = 0; j < net.numPins(); ++j)
         {
             Pin &pin = net.pin(j);
             unsigned module_id = pin.moduleId();
-            if (placement_.module(module_id).isFixed()) {
+            if (placement_.module(module_id).isFixed())
+            {
                 continue; // Skip fixed modules
             }
             double pin_x_pos = input[module_id].x + pin.xOffset();
@@ -83,9 +136,9 @@ const double &Wirelength::operator()(const std::vector<Point2<double>> &input)
             double WA_y_max_nominator_grad = (1 + pin_y_pos / gamma_) * exp_y_max;
             double WA_y_min_nominator_grad = (1 - pin_y_pos / gamma_) * exp_y_min;
             double WA_x_max_denominator_grad = exp_x_max / gamma_;
-            double WA_x_min_denominator_grad = - exp_x_min / gamma_;
+            double WA_x_min_denominator_grad = -exp_x_min / gamma_;
             double WA_y_max_denominator_grad = exp_y_max / gamma_;
-            double WA_y_min_denominator_grad = - exp_y_min / gamma_;
+            double WA_y_min_denominator_grad = -exp_y_min / gamma_;
             double WA_x_max_grad = (WA_x_max_nominator_grad * WA_x_max_denominator - WA_x_max_numerator * WA_x_max_denominator_grad) / pow(WA_x_max_denominator, 2);
             double WA_x_min_grad = (WA_x_min_nominator_grad * WA_x_min_denominator - WA_x_min_numerator * WA_x_min_denominator_grad) / pow(WA_x_min_denominator, 2);
             double WA_y_max_grad = (WA_y_max_nominator_grad * WA_y_max_denominator - WA_y_max_numerator * WA_y_max_denominator_grad) / pow(WA_y_max_denominator, 2);
@@ -93,10 +146,15 @@ const double &Wirelength::operator()(const std::vector<Point2<double>> &input)
             double grad_x = WA_x_max_grad - WA_x_min_grad;
             double grad_y = WA_y_max_grad - WA_y_min_grad;
             // Update the gradient for the module
+            
+            #pragma omp atomic
             grad_[module_id].x += grad_x;
+            #pragma omp atomic
             grad_[module_id].y += grad_y;
         }
-    } 
+        #pragma omp atomic
+        value_ += WA_wirelength;
+    }
 
     // stable WA
     // for (size_t i = 0; i < placement_.numNets(); ++i)
@@ -189,7 +247,7 @@ const std::vector<Point2<double>> &Wirelength::Backward()
     return grad_;
 }
 
-Density::Density(Placement &placement, const double& grid_num) : BaseFunction(placement.numModules()), placement_(placement), grid_num_(grid_num)
+Density::Density(Placement &placement, const double &grid_num) : BaseFunction(placement.numModules()), placement_(placement), grid_num_(grid_num)
 {
     double target_density = 1.; // Target density, you may modify this value.
     w_b_ = (placement_.boundryRight() - placement_.boundryLeft()) / grid_num_;
@@ -198,7 +256,7 @@ Density::Density(Placement &placement, const double& grid_num) : BaseFunction(pl
     init_bin_density_minus_movable_area_ = bin_density_minus_movable_area_;
     printf("bin width is %.4f, bin height is %.4f", w_b_, h_b_);
     printf("    Placement boundry: (%.f,%.f)-(%.f,%.f)\n", placement_.boundryLeft(), placement_.boundryBottom(),
-    placement_.boundryRight(), placement_.boundryTop());
+           placement_.boundryRight(), placement_.boundryTop());
 }
 
 const double &Density::operator()(const std::vector<Point2<double>> &input)
@@ -207,6 +265,8 @@ const double &Density::operator()(const std::vector<Point2<double>> &input)
     bin_density_minus_movable_area_ = init_bin_density_minus_movable_area_;
     module_to_bin_indexes_ = std::vector<std::set<int>>(kNumModule);
     value_ = 0.;
+
+    #pragma omp parallel for
     for (size_t k = 0; k < kNumModule; ++k)
     {
         Module &cur_module = placement_.module(k);
@@ -234,13 +294,15 @@ const double &Density::operator()(const std::vector<Point2<double>> &input)
                 double bin_center_x = placement_.boundryLeft() + (i + 0.5) * w_b_;
                 double bin_center_y = placement_.boundryBottom() + (j + 0.5) * h_b_;
                 Rectangle bin_rect_4x = Rectangle(bin_center_x - w_b_ * 2, bin_center_y - h_b_ * 2, bin_center_x + w_b_ * 2, bin_center_y + h_b_ * 2);
-                double overlap = Rectangle::overlapArea(Rectangle(input[k].x-w_v/2, input[k].y-h_v/2, input[k].x+w_v/2, input[k].y+h_v/2), bin_rect_4x);
+                double overlap = Rectangle::overlapArea(Rectangle(input[k].x - w_v / 2, input[k].y - h_v / 2, input[k].x + w_v / 2, input[k].y + h_v / 2), bin_rect_4x);
                 if (overlap == 0.)
                 {
                     continue;
                 }
                 int bin_index = i * grid_num_ + j;
+
                 module_to_bin_indexes_[k].insert(bin_index);
+
                 double p_x = 0.;
                 double p_y = 0.;
                 double d_x = std::abs(input[k].x - bin_center_x);
@@ -273,10 +335,13 @@ const double &Density::operator()(const std::vector<Point2<double>> &input)
         {
             int bin_index = bin_index_and_pxpy.first;
             double pxpy = bin_index_and_pxpy.second;
-            bin_density_minus_movable_area_[bin_index] += (pxpy/cell_sum_pxpy) * cur_module.area();
+            double addition = (pxpy / cell_sum_pxpy) * cur_module.area();
+            #pragma omp atomic
+            bin_density_minus_movable_area_[bin_index] += addition;
         }
     }
-    for (int bin_index = 0; bin_index < grid_num_*grid_num_; ++bin_index)
+
+    for (int bin_index = 0; bin_index < grid_num_ * grid_num_; ++bin_index)
     {
         value_ += std::pow(bin_density_minus_movable_area_[bin_index], 2);
     }
@@ -288,6 +353,8 @@ const std::vector<Point2<double>> &Density::Backward()
 {
     const size_t &kNumModule = placement_.numModules();
     grad_ = std::vector<Point2<double>>(kNumModule);
+
+    #pragma omp parallel for
     for (size_t k = 0; k < kNumModule; ++k)
     {
         Module &cur_module = placement_.module(k);
@@ -310,46 +377,46 @@ const std::vector<Point2<double>> &Density::Backward()
             int j = bin_index % grid_num_;
             double bin_center_x = placement_.boundryLeft() + (i + 0.5) * w_b_;
             double bin_center_y = placement_.boundryBottom() + (j + 0.5) * h_b_;
-                double p_x = 0.;
-                double p_y = 0.;
-                double d_x = std::abs(input_[k].x - bin_center_x);
-                double d_y = std::abs(input_[k].y - bin_center_y);
-                double p_x_grad = 0.;
-                double p_y_grad = 0.;
-                if (d_x <= (w_v / 2 + w_b_))
-                {
-                    double a_x = 4. / ((w_v + 2. * w_b_) * (w_v + 4. * w_b_));
-                    p_x = 1. - a_x * std::pow(d_x, 2);
-                    p_x_grad = -2. * a_x * d_x;
-                    p_x_grad = (input_[k].x < bin_center_x) ? -p_x_grad : p_x_grad; // adjust gradient direction
-                }
-                else if (d_x <= (w_v / 2 + w_b_ * 2))
-                {
-                    double b_x = 2. / (w_b_ * (w_v + 4 * w_b_));
-                    p_x = b_x * std::pow((d_x - w_v / 2. - 2. * w_b_), 2);
-                    p_x_grad = 2. * b_x * (d_x - w_v / 2. - w_b_ * 2.);
-                    p_x_grad = (input_[k].x < (bin_center_x + w_v/2. + w_b_/2.)) ? -p_x_grad : p_x_grad; // adjust gradient direction
-                }
-                if (d_y <= (h_v / 2 + h_b_))
-                {
-                    double a_y = 4. / ((h_v + 2. * h_b_) * (h_v + 4. * h_b_));
-                    p_y = 1. - a_y * std::pow(d_y, 2);
-                    p_y_grad = -2. * a_y * d_y;
-                    p_y_grad = (input_[k].y < bin_center_y) ? -p_y_grad : p_y_grad; // adjust gradient direction
-                }
-                else if (d_y <= (h_v / 2 + h_b_ * 2))
-                {
-                    double b_y = 2. / (h_b_ * (h_v + 4 * h_b_));
-                    p_y = b_y * std::pow(d_y - h_v / 2. - h_b_ * 2., 2);
-                    p_y_grad = 2. * b_y * (d_y - h_v / 2. - h_b_ * 2.);
-                    p_y_grad = (input_[k].y < (bin_center_y + h_v/2. + h_b_/2.)) ? -p_y_grad : p_y_grad; // adjust gradient direction
-                }
-                bin_index_to_pxpy[bin_index] = p_x * p_y;
-                bin_index_to_px_py_grad[bin_index] = p_x * p_y_grad;
-                bin_index_to_px_grad_py[bin_index] = p_x_grad * p_y;
-                cell_sum_pxpy += bin_index_to_pxpy[bin_index];
-                cell_sum_px_py_grad += bin_index_to_px_py_grad[bin_index];
-                cell_sum_px_grad_py += bin_index_to_px_grad_py[bin_index];
+            double p_x = 0.;
+            double p_y = 0.;
+            double d_x = std::abs(input_[k].x - bin_center_x);
+            double d_y = std::abs(input_[k].y - bin_center_y);
+            double p_x_grad = 0.;
+            double p_y_grad = 0.;
+            if (d_x <= (w_v / 2 + w_b_))
+            {
+                double a_x = 4. / ((w_v + 2. * w_b_) * (w_v + 4. * w_b_));
+                p_x = 1. - a_x * std::pow(d_x, 2);
+                p_x_grad = -2. * a_x * d_x;
+                p_x_grad = (input_[k].x < bin_center_x) ? -p_x_grad : p_x_grad; // adjust gradient direction
+            }
+            else if (d_x <= (w_v / 2 + w_b_ * 2))
+            {
+                double b_x = 2. / (w_b_ * (w_v + 4 * w_b_));
+                p_x = b_x * std::pow((d_x - w_v / 2. - 2. * w_b_), 2);
+                p_x_grad = 2. * b_x * (d_x - w_v / 2. - w_b_ * 2.);
+                p_x_grad = (input_[k].x < (bin_center_x + w_v / 2. + w_b_ / 2.)) ? -p_x_grad : p_x_grad; // adjust gradient direction
+            }
+            if (d_y <= (h_v / 2 + h_b_))
+            {
+                double a_y = 4. / ((h_v + 2. * h_b_) * (h_v + 4. * h_b_));
+                p_y = 1. - a_y * std::pow(d_y, 2);
+                p_y_grad = -2. * a_y * d_y;
+                p_y_grad = (input_[k].y < bin_center_y) ? -p_y_grad : p_y_grad; // adjust gradient direction
+            }
+            else if (d_y <= (h_v / 2 + h_b_ * 2))
+            {
+                double b_y = 2. / (h_b_ * (h_v + 4 * h_b_));
+                p_y = b_y * std::pow(d_y - h_v / 2. - h_b_ * 2., 2);
+                p_y_grad = 2. * b_y * (d_y - h_v / 2. - h_b_ * 2.);
+                p_y_grad = (input_[k].y < (bin_center_y + h_v / 2. + h_b_ / 2.)) ? -p_y_grad : p_y_grad; // adjust gradient direction
+            }
+            bin_index_to_pxpy[bin_index] = p_x * p_y;
+            bin_index_to_px_py_grad[bin_index] = p_x * p_y_grad;
+            bin_index_to_px_grad_py[bin_index] = p_x_grad * p_y;
+            cell_sum_pxpy += bin_index_to_pxpy[bin_index];
+            cell_sum_px_py_grad += bin_index_to_px_py_grad[bin_index];
+            cell_sum_px_grad_py += bin_index_to_px_grad_py[bin_index];
         }
         for (const auto &bin_index_and_pxpy : bin_index_to_pxpy)
         {
@@ -358,10 +425,13 @@ const std::vector<Point2<double>> &Density::Backward()
             double px_grad_py = bin_index_to_px_grad_py[bin_index];
             double px_py_grad = bin_index_to_px_py_grad[bin_index];
             assert(cell_sum_pxpy != 0.);
-            grad_[k].x += 2 * bin_density_minus_movable_area_[bin_index] * cur_module.area() * (cell_sum_pxpy * px_grad_py - cell_sum_px_grad_py * pxpy) / pow(cell_sum_pxpy, 2);
-            grad_[k].y += 2 * bin_density_minus_movable_area_[bin_index] * cur_module.area() * (cell_sum_pxpy * px_py_grad - cell_sum_px_py_grad * pxpy) / pow(cell_sum_pxpy, 2);
+            double grad_x = 2 * bin_density_minus_movable_area_[bin_index] * cur_module.area() * (cell_sum_pxpy * px_grad_py - cell_sum_px_grad_py * pxpy) / pow(cell_sum_pxpy, 2);
+            double grad_y = 2 * bin_density_minus_movable_area_[bin_index] * cur_module.area() * (cell_sum_pxpy * px_py_grad - cell_sum_px_py_grad * pxpy) / pow(cell_sum_pxpy, 2);
+            #pragma omp atomic
+            grad_[k].x += grad_x;
+            #pragma omp atomic
+            grad_[k].y += grad_y;
         }
-
     }
     return grad_;
 }
@@ -370,17 +440,19 @@ double Density::calculateOverflowRatio()
 {
     double total_area = (placement_.boundryRight() - placement_.boundryLeft()) * (placement_.boundryTop() - placement_.boundryBottom());
     double overflow_area = 0.;
-    for (int bin_index = 0; bin_index < grid_num_*grid_num_; ++bin_index)
+
+    for (int bin_index = 0; bin_index < grid_num_ * grid_num_; ++bin_index)
     {
-        if (bin_density_minus_movable_area_[bin_index] > 0.)
+        if (bin_density_minus_movable_area_[bin_index] < 0.)
         {
-            overflow_area += bin_density_minus_movable_area_[bin_index];
+            continue;
         }
+        overflow_area += bin_density_minus_movable_area_[bin_index];
     }
     return overflow_area / total_area;
 }
 
-ObjectiveFunction::ObjectiveFunction(Placement &placement, double grid_num, Wirelength& wirelength, Density& density)
+ObjectiveFunction::ObjectiveFunction(Placement &placement, double grid_num, Wirelength &wirelength, Density &density)
     : BaseFunction(placement.numModules()), placement_(placement), grid_num_(grid_num), wirelength_(wirelength), density_(density), lambda_(1.0)
 {
     printf("ObjectiveFunction initialized with grid_num = %.2f\n", grid_num);
@@ -391,10 +463,8 @@ const double &ObjectiveFunction::operator()(const std::vector<Point2<double>> &i
     // Compute wirelength and density
     double wirelength_value = wirelength_(input);
     double density_value = density_(input);
-    
     // Calculate the objective function value
     value_ = wirelength_value + lambda_ * density_value;
-    
     // Return the computed value
     return value_;
 }
@@ -404,14 +474,13 @@ const std::vector<Point2<double>> &ObjectiveFunction::Backward()
     // Compute gradients for wirelength and density
     const std::vector<Point2<double>> &wirelength_grad = wirelength_.Backward();
     const std::vector<Point2<double>> &density_grad = density_.Backward();
-    
+
     // Combine gradients
     grad_ = wirelength_grad;
     for (size_t i = 0; i < grad_.size(); ++i)
     {
         grad_[i] += density_grad[i] * lambda_;
     }
-    
     // Return the computed gradient
     return grad_;
 }
