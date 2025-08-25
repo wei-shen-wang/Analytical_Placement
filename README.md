@@ -29,12 +29,18 @@ This project is an implementation of VLSI Placement using analytical method. Wei
 
 | Benchmark | HPWL (1e6) |
 |:---  | ---: |
-| ibm01  | 47.36 |
-| ibm02  | 131.93 |
-| ibm05  | 9.48 |
-| ibm07  | 307.76 |
-| ibm08  | 318.37 |
-| ibm09  | 273.96 |
+| ibm01  | 47.60 |
+| ibm02  | 131.90 |
+| ibm05  | 9.47 |
+| ibm07  | 307.77 |
+| ibm08  | 318.16 |
+| ibm09  | 273.85 |
+
+## GIF
+
+| ibm01 | ibm09 |
+|:---:|:---:|
+| <img src ="/gifs/ibm01-cu85.gif"> | <img src ="/gifs/ibm09-cu90.gif"> |
 
 ## Reference
 
