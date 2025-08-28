@@ -29,7 +29,6 @@ public:
     const double &value() const { return value_; }
     const double getSumOfNormPartialDerivative();
 
-
     /////////////////////////////////
     // Methods
     /////////////////////////////////
@@ -63,8 +62,9 @@ public:
 
     const double &operator()(const std::vector<Point2<double>> &input) override;
     const std::vector<Point2<double>> &Backward() override;
+
 private:
-    Placement &placement_; // Reference to the placement object
+    Placement &placement_;              // Reference to the placement object
     std::vector<Point2<double>> input_; // Cache the input for backward pass
     double gamma_;
 };
@@ -83,7 +83,22 @@ public:
 
     const double &operator()(const std::vector<Point2<double>> &input) override;
     const std::vector<Point2<double>> &Backward() override;
-    double calculateOverflowRatio();
+    inline double calculateOverflowRatio()
+    {
+        double total_area = (placement_.boundryRight() - placement_.boundryLeft()) * (placement_.boundryTop() - placement_.boundryBottom());
+        double overflow_area = 0.;
+
+        for (const double &bin_density : bin_density_minus_movable_area_)
+        {
+            if (bin_density < 0.)
+            {
+                continue;
+            }
+            overflow_area += bin_density;
+        }
+
+        return overflow_area / total_area;
+    }
 
 private:
     /////////////////////////////////
@@ -93,8 +108,8 @@ private:
     std::vector<Point2<double>> input_; // Cache the input for backward pass
     Placement &placement_;
     int grid_num_;
+    int grid_num_squared_;
     std::vector<double> bin_density_minus_movable_area_;
-    std::vector<double> init_bin_density_minus_movable_area_;
     std::vector<std::set<int>> module_to_bin_indexes_;
     double w_b_;
     double h_b_;
@@ -120,11 +135,11 @@ public:
 
     const double &operator()(const std::vector<Point2<double>> &input) override;
     const std::vector<Point2<double>> &Backward() override;
-    void setLambda(double lambda) {  lambda_ = lambda; };
+    void setLambda(double lambda) { lambda_ = lambda; };
 
 private:
     Placement &placement_; // Reference to the placement object
-    double grid_num_; // Number of bins in one dimension
+    double grid_num_;      // Number of bins in one dimension
     Wirelength &wirelength_;
     Density &density_;
     double lambda_; // Penalty weight for density

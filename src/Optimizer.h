@@ -56,16 +56,15 @@ public:
     /////////////////////////////////
 
     // Set the scaling factor for the step size
-    void setScalingFactor(double scaling_factor);
-    double getScalingFactor() const { return scaling_factor_; }
-    
+    inline void setScalingFactor(double scaling_factor) { scaling_factor_ = scaling_factor; }
+    inline double getScalingFactor() const { return scaling_factor_; }
+
     // Initialize the optimizer
     void Initialize() override;
 
     // Perform one optimization step
     void Step() override;
-    double getAlpha() const { return alpha_; }
-
+    inline double getAlpha() const { return alpha_; }
 
 private:
     /////////////////////////////////
@@ -78,10 +77,10 @@ private:
                                             // i.e., d_{k-1} in the NTUPlace3 paper
     size_t step_;                           // Current step number
     double alpha_;                          // Step size
-    double w_b_;      // Width of the bin
-    double h_b_;      // Height of the bin
-    double grid_num_; // Number of bins in one dimension
-    double scaling_factor_; // Scaling factor for the step size
+    double w_b_;                            // Width of the bin
+    double h_b_;                            // Height of the bin
+    double grid_num_;                       // Number of bins in one dimension
+    double scaling_factor_;                 // Scaling factor for the step size
     Placement &placement_;
 };
 

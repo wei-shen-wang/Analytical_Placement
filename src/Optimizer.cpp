@@ -13,9 +13,8 @@ SimpleConjugateGradient::SimpleConjugateGradient(BaseFunction &obj,
       grid_num_(grid_num),
       placement_(placement)
 {
-        w_b_ = (placement_.boundryRight() - placement_.boundryLeft()) / grid_num_;
-        h_b_ = (placement_.boundryTop() - placement_.boundryBottom()) / grid_num_;
-
+    w_b_ = (placement_.boundryRight() - placement_.boundryLeft()) / grid_num_;
+    h_b_ = (placement_.boundryTop() - placement_.boundryBottom()) / grid_num_;
 }
 
 void SimpleConjugateGradient::Initialize()
@@ -44,7 +43,10 @@ void SimpleConjugateGradient::Step()
         beta = 0.;
         for (size_t i = 0; i < kNumModule; ++i)
         {
-            if (placement_.module(i).isFixed()) {continue;}
+            if (placement_.module(i).isFixed())
+            {
+                continue;
+            }
             dir[i] = -obj_.grad().at(i);
         }
     }
@@ -56,7 +58,10 @@ void SimpleConjugateGradient::Step()
         double t2 = 0.; // Store the denominator of beta
         for (size_t i = 0; i < kNumModule; ++i)
         {
-            if (placement_.module(i).isFixed()) {continue;}
+            if (placement_.module(i).isFixed())
+            {
+                continue;
+            }
             Point2<double> t3 =
                 obj_.grad().at(i) * (obj_.grad().at(i) - grad_prev_.at(i));
             t1 += t3.x + t3.y;
@@ -65,7 +70,10 @@ void SimpleConjugateGradient::Step()
         beta = t1 / (t2 * t2);
         for (size_t i = 0; i < kNumModule; ++i)
         {
-            if (placement_.module(i).isFixed()) {continue;}
+            if (placement_.module(i).isFixed())
+            {
+                continue;
+            }
             dir[i] = -obj_.grad().at(i) + beta * dir_prev_.at(i);
         }
     }
@@ -73,22 +81,24 @@ void SimpleConjugateGradient::Step()
     // Assume the step size is constant
     // TODO(Optional): Change to dynamic step-size control
     double sum_d_sq = 0.;
-    for (size_t i = 0;i < kNumModule;++i){
-        if (placement_.module(i).isFixed()) {
+    for (size_t i = 0; i < kNumModule; ++i)
+    {
+        if (placement_.module(i).isFixed())
+        {
             continue;
         }
         sum_d_sq += Dot(dir[i], dir[i]);
     }
-    // scaling_factor_ = 0.1;
     alpha_ = scaling_factor_ * w_b_ / std::sqrt(sum_d_sq / kNumModule);
-    // scaling_factor_ = 10.;
-    // alpha_ = scaling_factor_ * w_b_ / std::sqrt(sum_d_sq);
 
     // Update the solution
     // Please be aware of the updating directions, i.e., the sign for each term.
     for (size_t i = 0; i < kNumModule; ++i)
     {
-        if (placement_.module(i).isFixed()) {continue;}
+        if (placement_.module(i).isFixed())
+        {
+            continue;
+        }
         var_[i] = var_[i] + alpha_ * dir[i];
     }
 
@@ -96,10 +106,4 @@ void SimpleConjugateGradient::Step()
     grad_prev_ = obj_.grad();
     dir_prev_ = dir;
     step_++;
-}
-
-// set the scaling factor for the step size
-void SimpleConjugateGradient::setScalingFactor(double scaling_factor)
-{
-    scaling_factor_ = scaling_factor;
 }

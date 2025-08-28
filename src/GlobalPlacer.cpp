@@ -14,47 +14,41 @@ GlobalPlacer::GlobalPlacer(Placement &placement)
 
 void GlobalPlacer::place()
 {
-    ////////////////////////////////////////////////////////////////////
-    // This section is an example for analytical methods.
-    ////////////////////////////////////////////////////////////////////
-    // Global placement algorithm
-    ////////////////////////////////////////////////////////////////////
-    // Place all module in the center of the placement area.
+    double original_center_x = _placement.rectangleChip().centerX();
+    double original_center_y = _placement.rectangleChip().centerY();
+    _placement.moveDesignCenter(-original_center_x, -original_center_y); // Move the design center to (0, 0)
     double chip_mid_x = _placement.rectangleChip().centerX();
     double chip_mid_y = _placement.rectangleChip().centerY();
     const size_t &kNumModule = _placement.numModules();
-    double grid_num = std::pow(kNumModule, 0.5);
-    std::vector<Point2<double>> positions(kNumModule); // Optimization variables (positions of modules). You may modify this line.
+    double grid_num = std::sqrt(kNumModule);
+    std::vector<Point2<double>> positions(kNumModule);
     for (size_t i = 0; i < kNumModule; i++)
     {
         Module &module = _placement.module(i);
         if (module.isFixed())
         {
             positions[i] = Point2<double>(module.centerX(), module.centerY());
-            continue; // Skip fixed modules.
+            continue;
         }
         positions[i] = Point2<double>(chip_mid_x, chip_mid_y);
     }
-    Wirelength wirelength(_placement); // Wirelength objective function
-    SimpleConjugateGradient wl_optimizer(wirelength, positions, grid_num, _placement); // Wirelength optimizer
-    wl_optimizer.setScalingFactor(0.1); // Set the scaling factor for the step
+    Wirelength wirelength(_placement);
+    SimpleConjugateGradient wl_optimizer(wirelength, positions, grid_num, _placement);
+    wl_optimizer.setScalingFactor(0.1);
     for (int i = 0;i < 1000; i++)
     {
-        wl_optimizer.Step(); // Perform one optimization step
+        wl_optimizer.Step();
     }
     Density density(_placement, grid_num);
-    wirelength(positions); // Compute the wirelength
-    wirelength.Backward(); // Compute the wirelength gradient
+    wirelength(positions);
+    wirelength.Backward();
     double partialDerivativeWirelength = wirelength.getSumOfNormPartialDerivative();
-    printf("partialDerivativeWirelength = %e\n", partialDerivativeWirelength);
     density(positions);
-    density.Backward(); // Compute the density gradient
+    density.Backward();
     double partialDerivativeDensity = density.getSumOfNormPartialDerivative();
-    printf("partialDerivativeDensity = %e\n", partialDerivativeDensity);
     double lambda = partialDerivativeWirelength / partialDerivativeDensity; // Set the penalty weight for density
-    printf("initial lambda = %e\n", lambda);
     double overflow_ratio = 100.0;      // Initialize overflow ratio
-    constexpr double limit_overflow_ratio = 0.05; // Set a limit for the overflow ratio
+    constexpr double limit_overflow_ratio = 0.01; // Set a limit for the overflow ratio
     int kMaxInnerIter = 1000;
     constexpr int limit_no_improvement_in_overflowratio = 10;
     constexpr int limit_no_improvement_in_cg = 100;
@@ -62,43 +56,57 @@ void GlobalPlacer::place()
     int iter = 0;
     int no_improvement = 0; // Counter for no improvement in iterations
     ObjectiveFunction objectiveFunction(_placement, grid_num, wirelength, density);
-    SimpleConjugateGradient optimizer(objectiveFunction, positions, grid_num, _placement); // Optimizer
+    SimpleConjugateGradient optimizer(objectiveFunction, positions, grid_num, _placement);
     optimizer.setScalingFactor(0.2);
     while ((overflow_ratio > limit_overflow_ratio) && (no_improvement < limit_no_improvement_in_overflowratio))
-    { // Continue until the overflow ratio is small enough
-        objectiveFunction.setLambda(lambda); // Set the penalty weight for density in the objective function
+    {
+        objectiveFunction.setLambda(lambda);
         optimizer.Initialize();
         double best_objective_value = objectiveFunction(positions); // Compute the initial objective value
         double objective_value = best_objective_value; // Initialize objective value
         double inner_best_overflow_ratio = density.calculateOverflowRatio();
         int no_improvement_in_cg = 0; // Counter for no improvement in conjugate gradient iterations
-        std::vector<Point2<double>> best_positions = positions; // Store the best positions found so far
+        std::vector<Point2<double>> best_positions = positions;
         int sub_iter = 0;
-        while ((no_improvement_in_cg < limit_no_improvement_in_cg) && (sub_iter < kMaxInnerIter)) // Perform optimization steps
-        { // Perform optimization until the objective value stops improving
+        while ((no_improvement_in_cg < limit_no_improvement_in_cg) && (sub_iter < kMaxInnerIter))
+        {
             optimizer.Step();
             overflow_ratio = density.calculateOverflowRatio();
-            if (iter % 50 == 0){
-                printf("iter = %d, sub_iter = %d, overflow = %.4f, f = %e, alpha = %.2f, lambda = %e\n", 
-                       iter, sub_iter, overflow_ratio, objective_value, optimizer.getAlpha() ,lambda);
+            if (iter % 100 == 0){
+                // for (size_t i = 0; i < kNumModule; i++)
+                // {
+                //     if (_placement.module(i).isFixed())
+                //     {
+                //         continue;
+                //     }
+                //     _placement.module(i).setCenterPosition(positions[i].x, positions[i].y);
+                // }
+                // _placement.moveDesignCenter(original_center_x, original_center_y);
+                // string pltName = "./" + _placement.name() + "/placement_iter_" + to_string(iter) + ".plt";
+                // plotPlacementResult(pltName, false);
+                // _placement.moveDesignCenter(-original_center_x, -original_center_y);
+                printf("iter = %d, sub_iter = %d, overflow = %.4f, f = %e, alpha = %.2f, lambda = %e, no improve = %d\n", 
+                       iter, sub_iter, overflow_ratio, objective_value, optimizer.getAlpha() ,lambda, no_improvement_in_cg);
                 fflush(stdout);
             }
             objective_value = objectiveFunction(positions); // Compute the objective value
+            double imporovement = best_objective_value - objective_value;
             if (objective_value < best_objective_value)
             {
-                best_objective_value = objective_value; // Update the best objective value
-                best_positions = positions; // Update the best positions
-                no_improvement_in_cg = 0; // Reset the no improvement counter
+                best_objective_value = objective_value;
+                best_positions = positions;
                 inner_best_overflow_ratio = overflow_ratio;
+                // no_improvement_in_cg = 0;
+                no_improvement_in_cg = (imporovement < 1e-5) ? no_improvement_in_cg + 1 : 0;
             }
             else
             {
-                no_improvement_in_cg++; // Increment the no improvement counter
+                no_improvement_in_cg++;
             }
             ++sub_iter;
             ++iter;
         }
-        positions = best_positions; // Update positions to the best found
+        positions = best_positions;
         if (inner_best_overflow_ratio < best_overflow_ratio)
         {
             best_overflow_ratio = inner_best_overflow_ratio; // Update the best overflow ratio
@@ -107,8 +115,8 @@ void GlobalPlacer::place()
         else{
             no_improvement++;
         }
-        lambda *= 2;
-        kMaxInnerIter = max(500, static_cast<int>(kMaxInnerIter*0.9));
+        lambda *= 2.;
+        kMaxInnerIter = max(500, static_cast<int>(kMaxInnerIter * 0.9));
     }
     ////////////////////////////////////////////////////////////////////
     // Write the placement result into the database. (You may modify this part.)
@@ -126,6 +134,7 @@ void GlobalPlacer::place()
         _placement.module(i).setCenterPosition(positions[i].x, positions[i].y);
     }
     printf("INFO: %lu / %lu modules are fixed.\n", fixed_cnt, kNumModule);
+    _placement.moveDesignCenter(original_center_x, original_center_y); // Move the design back
 }
 
 void GlobalPlacer::plotPlacementResult(const string outfilename, bool isPrompt)

@@ -54,9 +54,9 @@ bool handleArgument( const int& argc, char* argv[], CParamPlacement& param )
 int main(int argc, char *argv[])
 {
 
-    omp_set_dynamic(0);
+    // omp_set_dynamic(0);
     omp_set_num_threads(8);
-    omp_set_schedule(omp_sched_static, 0);
+    // omp_set_schedule(omp_sched_static, 0);
 	
 	gArg.Init( argc, argv );
     if( !handleArgument( argc, argv, param ) )
@@ -66,9 +66,7 @@ int main(int argc, char *argv[])
 
     Placement placement;
     placement.readBookshelfFormat(param.auxFilename , param.plFilename);
-    double original_center_x = placement.rectangleChip().centerX();
-    double original_center_y = placement.rectangleChip().centerY();
-    placement.moveDesignCenter(-original_center_x, -original_center_y); // Move the design center to (0, 0)
+
     cout << "Benchmark: " << placement.name() << endl;
 
     cout << format("HPWL: %.f", placement.computeHpwl()) << endl;
@@ -101,7 +99,8 @@ int main(int argc, char *argv[])
 		
 		GlobalPlacer globalPlacer(placement);
 		globalPlacer.place();
-		globalPlacer.plotPlacementResult( placement.name() + "_gp.plt" );
+        string pltName = "./" + placement.name() + "/placement_gp_50000.plt";
+		globalPlacer.plotPlacementResult(pltName);
 
 		/////////////////////////////////////////////////
 		
@@ -113,7 +112,6 @@ int main(int argc, char *argv[])
         total_global_time = time(NULL) - global_time_start;
         total_time+=total_global_time;
     }
-    placement.moveDesignCenter(original_center_x, original_center_y); // Move the design back
 
 
     ////////////////////////////////////////////////////////////////
@@ -145,7 +143,9 @@ int main(int argc, char *argv[])
         total_legal_time = time(NULL) - legal_time_start;
         total_time+=total_legal_time;
     }
-
+    GlobalPlacer lp_plotter(placement);
+    string pltName = "./" + placement.name() + "/placement_lp_50001.plt";
+    lp_plotter.plotPlacementResult(pltName);
     ////////////////////////////////////////////////////////////////
     // Detail Placement
     ////////////////////////////////////////////////////////////////
@@ -169,8 +169,9 @@ int main(int argc, char *argv[])
         total_detail_time = time(NULL) - detail_time_start;
         total_time+=total_detail_time;
     }
-    GlobalPlacer plotter(placement);
-    plotter.plotPlacementResult( placement.name() + "_final.plt" );
+    GlobalPlacer dp_plotter(placement);
+    pltName = "./" + placement.name() + "/placement_dp_50002.plt";
+    dp_plotter.plotPlacementResult(pltName);
 
     cout<<endl<<endl<<"////////////////////"<<endl;
     if(placement.plname()!="")

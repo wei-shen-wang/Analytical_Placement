@@ -1,5 +1,9 @@
 # VLSI Physical Design Analytical Placement
 
+| <img src ="/gifs/ibm01-cu85.gif"> | <img src ="/gifs/ibm09-cu90.gif"> |
+|:---:|:---:|
+| ibm01 | ibm09 |
+
 ## Description
 
 This project is an implementation of VLSI Placement using analytical method. Weighted-Average (WA) Wirelength Model [1] and Bell-Shape Potential Density Model[2] are implemented.
@@ -29,18 +33,12 @@ This project is an implementation of VLSI Placement using analytical method. Wei
 
 | Benchmark | HPWL (1e6) |
 |:---  | ---: |
-| ibm01  | 47.60 |
-| ibm02  | 131.90 |
-| ibm05  | 9.47 |
-| ibm07  | 307.77 |
-| ibm08  | 318.16 |
-| ibm09  | 273.85 |
-
-## GIF
-
-| ibm01 | ibm09 |
-|:---:|:---:|
-| <img src ="/gifs/ibm01-cu85.gif"> | <img src ="/gifs/ibm09-cu90.gif"> |
+| ibm01  | 46.65 |
+| ibm02  | 131.84 |
+| ibm05  | 9.37 |
+| ibm07  | 302.94 |
+| ibm08  | 318.37 |
+| ibm09  | 273.66 |
 
 ## Reference
 
